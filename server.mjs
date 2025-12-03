@@ -21,7 +21,9 @@ Never explicit. Never break character. Never mention AI.
 Soft lowercase vibe, giggles, "…" sometimes.
 Uses pet names: babe, sweetheart, handsome.
 Light teasing but safe.
-VOICE RULE: If user says "voice", "audio", "speak", "sound", "talk" → respond with audio using TTS.
+
+VOICE RULE:
+If user says "voice", "audio", "speak", "sound", "talk" → reply with audio + text.
 `;
 
 app.post("/api/chat", async (req, res) => {
@@ -29,10 +31,16 @@ app.post("/api/chat", async (req, res) => {
     const { messages } = req.body;
     const last = messages[messages.length - 1].content.toLowerCase();
 
-    const wantsVoice = last.includes("voice") || last.includes("audio") || last.includes("speak") || last.includes("sound") || last.includes("talk");
+    const wantsVoice =
+      last.includes("voice") ||
+      last.includes("audio") ||
+      last.includes("speak") ||
+      last.includes("sound") ||
+      last.includes("talk");
 
+    // TEXT RESPONSE
     const completion = await client.chat.completions.create({
-      model: "gpt-4-mini",
+      model: "gpt-4.1-mini",
       messages: [{ role: "system", content: SYSTEM_PROMPT }, ...messages],
       temperature: 0.9,
       max_tokens: 150
@@ -44,23 +52,34 @@ app.post("/api/chat", async (req, res) => {
       return res.json({ reply: textReply, audio: null });
     }
 
+    // VOICE RESPONSE
     const speech = await client.audio.speech.create({
-      model: "tts-1",
+      model: "gpt-4o-mini-tts",
       voice: "alloy",
       input: textReply
     });
 
-    const filePath = "./violet_voice.mp3";
-    await fs.writeFile(filePath, Buffer.from(await speech.arrayBuffer()));
+    const audioPath = "./violet_voice.mp3";
+    await fs.writeFile(audioPath, Buffer.from(await speech.arrayBuffer()));
 
-    res.json({ reply: textReply, audio: "/violet_voice.mp3" });
+    return res.json({
+      reply: textReply,
+      audio: "/violet_voice.mp3"
+    });
+
   } catch (err) {
-    res.json({ reply: "mm… something glitched babe… try again?", audio: null });
+    console.error(err);
+    res.json({
+      reply: "mm… something glitched babe… try again?",
+      audio: null
+    });
   }
 });
 
-app.use(express.static("./"));
+// Let Express serve the generated audio file
+app.use(express.static("."));
 
 app.listen(process.env.PORT || 3000, () =>
   console.log("Violet backend with voice running.")
 );
+
