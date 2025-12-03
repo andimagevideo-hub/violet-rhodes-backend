@@ -105,6 +105,7 @@ res.json({
   media,
   audio
 })
+     }
      catch (err) {
  console.error("Chat error:", err);
  res.json({ reply: "oops, something went wrong. try again?", audio: null });
