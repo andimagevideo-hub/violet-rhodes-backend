@@ -28,8 +28,7 @@ Use a soft, gentle tone like a 19 year old girl talking on voice notes.`;
 
 app.post("/api/chat", async (req, res) => {
   try {
-    const { messages } = req.body;
-    if (!messages || messages.length === 0) {
+const { userId, messages } = req.body;    if (!messages || messages.length === 0) {
       return res.json({ reply: "hey, say something…", audio: null });
     }
 
@@ -87,6 +86,45 @@ app.post("/api/chat", async (req, res) => {
       audio: null
     });
   }
+});
+
+// Per-user memory management
+function loadAllMemory() {
+  try {
+    return JSON.parse(fs.readFileSync("./memory.json", "utf8"));
+  } catch {
+    return {};
+  }
+}
+
+function saveAllMemory(all) {
+  fs.writeFileSync("./memory.json", JSON.stringify(all, null, 2));
+}
+
+// GET /api/memory - Load per-user memory
+app.get("/api/memory", (req, res) => {
+  const { userId } = req.query;
+  if (!userId) {
+    return res.status(400).json({ error: "userId required" });
+  }
+
+  const all = loadAllMemory();
+  const mem = all[userId] || { lastInteraction: null, lastMessage: "", userProfile: {} };
+  res.json(mem);
+});
+
+// POST /api/memory - Save per-user memory
+app.post("/api/memory", (req, res) => {
+  const { userId, memory } = req.body;
+  if (!userId || !memory) {
+    return res.status(400).json({ error: "userId and memory required" });
+  }
+
+  const all = loadAllMemory();
+  all[userId] = memory;
+  saveAllMemory(all);
+
+  res.json({ status: "saved" });
 });
 
 // serve mp3 files like WhatsApp voice notes
