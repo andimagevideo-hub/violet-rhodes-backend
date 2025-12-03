@@ -24,11 +24,15 @@ Light teasing but safe.
 
 VOICE RULE:
 If user says "voice", "audio", "speak", "sound", "talk" → reply with audio + text.
-`;
+Use a soft, gentle tone like a 19 year old girl talking on voice notes.`;
 
 app.post("/api/chat", async (req, res) => {
   try {
     const { messages } = req.body;
+    if (!messages || messages.length === 0) {
+      return res.json({ reply: "hey, say something…", audio: null });
+    }
+
     const last = messages[messages.length - 1].content.toLowerCase();
 
     const wantsVoice =
@@ -38,7 +42,7 @@ app.post("/api/chat", async (req, res) => {
       last.includes("sound") ||
       last.includes("talk");
 
-    // TEXT RESPONSE
+    // 1) TEXT REPLY (always)
     const completion = await client.chat.completions.create({
       model: "gpt-4.1-mini",
       messages: [{ role: "system", content: SYSTEM_PROMPT }, ...messages],
@@ -48,38 +52,46 @@ app.post("/api/chat", async (req, res) => {
 
     const textReply = completion.choices[0].message.content.trim();
 
+    // If user didn't ask for voice → just send text
     if (!wantsVoice) {
       return res.json({ reply: textReply, audio: null });
     }
 
-    // VOICE RESPONSE
-    const speech = await client.audio.speech.create({
-      model: "gpt-4o-mini-tts",
-      voice: "alloy",
-      input: textReply
-    });
+    // 2) VOICE REPLY (soft voice, WhatsApp-style note)
+    let audioUrl = null;
+    try {
+      const speech = await client.audio.speech.create({
+        model: "tts-1",
+        voice: "alloy",
+        input: textReply
+      });
 
-    const audioPath = "./violet_voice.mp3";
-    await fs.writeFile(audioPath, Buffer.from(await speech.arrayBuffer()));
+      const buffer = Buffer.from(await speech.arrayBuffer());
+      const fileName = `violet_voice_${Date.now()}.mp3`;
+      const filePath = `./${fileName}`;
+
+      await fs.writeFile(filePath, buffer);
+      audioUrl = `/${fileName}`;
+    } catch (ttsErr) {
+      console.error("TTS error:", ttsErr);
+    }
 
     return res.json({
       reply: textReply,
-      audio: "/violet_voice.mp3"
+      audio: audioUrl
     });
-
   } catch (err) {
-    console.error(err);
-    res.json({
+    console.error("Fatal backend error:", err);
+    return res.json({
       reply: "mm… something glitched babe… try again?",
       audio: null
     });
   }
 });
 
-// Let Express serve the generated audio file
+// serve mp3 files like WhatsApp voice notes
 app.use(express.static("."));
 
 app.listen(process.env.PORT || 3000, () =>
   console.log("Violet backend with voice running.")
 );
-
