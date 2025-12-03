@@ -41,6 +41,20 @@ const { userId, messages } = req.body;    if (!messages || messages.length === 0
       last.includes("sound") ||
       last.includes("talk");
 
+    const wantsPhoto =
+  last.includes("photo") ||
+  last.includes("pic") ||
+  last.includes("picture") ||
+  last.includes("selfie");
+
+const wantsVideo =
+  last.includes("video") ||
+  last.includes("vid");
+
+// OnlyFans-style: NO media unless explicitly requested
+let media = null;
+let audio = null;
+
     // 1) TEXT REPLY (always)
     const completion = await client.chat.completions.create({
       model: "gpt-4.1-mini",
@@ -51,41 +65,47 @@ const { userId, messages } = req.body;    if (!messages || messages.length === 0
 
     const textReply = completion.choices[0].message.content.trim();
 
-    // If user didn't ask for voice → just send text
-    if (!wantsVoice) {
-      return res.json({ reply: textReply, audio: null });
-    }
+// OnlyFans-style: ONLY send media if explicitly requested
+if (wantsPhoto) {
+  media = { type: "image", src: "/media/violet1.jpg" };
+}
 
-    // 2) VOICE REPLY (soft voice, WhatsApp-style note)
-    let audioUrl = null;
-    try {
-      const speech = await client.audio.speech.create({
-        model: "tts-1",
-        voice: "alloy",
-        input: textReply
-      });
+if (wantsVideo) {
+  media = { type: "video", src: "/media/violet_intro.mp4" };
+}
 
-      const buffer = Buffer.from(await speech.arrayBuffer());
-      const fileName = `violet_voice_${Date.now()}.mp3`;
-      const filePath = `./${fileName}`;
-
-      await fs.writeFile(filePath, buffer);
-      audioUrl = `/${fileName}`;
-    } catch (ttsErr) {
-      console.error("TTS error:", ttsErr);
-    }
-
-    return res.json({
-      reply: textReply,
-      audio: audioUrl
+if (wantsVoice) {
+  // Generate TTS voice
+  let audioUrl1 = null;
+  try {
+    const speech = await client.audio.speech.create({
+      model: "tts-1",
+      voice: "alloy",
+      input: textReply
     });
-  } catch (err) {
-    console.error("Fatal backend error:", err);
-    return res.json({
-      reply: "mm… something glitched babe… try again?",
-      audio: null
-    });
+
+    const buffer = Buffer.from(await speech.arrayBuffer());
+    const fileName = `violet_voice_${Date.now()}.mp3`;
+    const filePath = `./${fileName}`;
+
+    await fs.writeFile(filePath, buffer);
+    audioUrl1 = `/${fileName}`;
+  } catch (ttsErr) {
+    console.error("TTS error:", ttsErr);
   }
+
+  if (audioUrl1) {
+    audio = audioUrl1;
+  }
+}
+
+// Default: no media, no audio unless explicitly requested above
+res.json({
+  reply: textReply,
+  media,
+  audio
+})
+      
 });
 
 // Per-user memory management
